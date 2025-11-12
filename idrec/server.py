@@ -1,16 +1,54 @@
-import os
 import tempfile
+from typing import *
+from pathlib import Path
+
 import streamlit as st
-import requests
 from PIL import Image
 from openai import OpenAI
 
-from idrec.recognition import request_id
 
 CLIENT = OpenAI(api_key=st.secrets.openai_api_key)
 
 # Load config
 ALLOWED_EMAILS = st.secrets.allowed_emails
+
+
+USER_PROMPT = """
+Answer with only the code on the field 'type' in the label. Do not include additional text in your reply.
+"""
+
+
+# Function to create a file with the Files API
+def create_file(client: OpenAI, file_path):
+    with open(file_path, "rb") as file_content:
+        result = client.files.create(
+            file=file_content,
+            purpose="vision",
+        )
+        return result.id
+
+
+def request_id(client: OpenAI, file: Union[Path, str]) -> str:
+    file = Path(file)
+    assert file.exists(), file
+    image_data = create_file(client, str(file))
+    response = client.responses.create(
+        model="gpt-4.1-mini",
+        input=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "input_text", "text": USER_PROMPT},
+                    {
+                        "type": "input_image",
+                        "file_id": image_data,
+                    },
+                ],
+            }
+        ],
+    )
+
+    return response.output_text
 
 
 def send_for_annotation(image: Image.Image):
@@ -54,10 +92,9 @@ if uploaded_image is not None:
             with tempfile.NamedTemporaryFile(suffix=".jpg") as fp:
 
                 image.save(fp)
-                response = ""  # request_id(CLIENT, fp.name)
+                response = request_id(CLIENT, fp.name)
 
         st.markdown(response.output_text)
-        # PICTURES.append(response.output_text)
-        # st.table(PICTURES)
+
 else:
     st.info("Please take a photo using your phone camera above.")
