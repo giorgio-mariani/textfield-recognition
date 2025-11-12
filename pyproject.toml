@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=80", "setuptools-scm[simple]>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+dynamic = ["version"]
+name = "glue3d"
+requires-python = ">= 3.10"
+description = "Official project for GLUE3D."
+authors = [{name="Giorgio Mariani", email="giorgiomariani94@gmail.com"},{name="Alessandro Raganato"},{ name="Simone Melzi"},{ name="Gabriella Pasi"}]
+keywords = ["benchmark", "point cloud", "multimodal", "three-dimensional", "3d"]
+readme = "assets/pypi_README.md"
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
+
+dependencies = [
+    "numpy",
+    "pandas",
+    "gradio",
+    "click",
+    "openai",
+]
+
+[project.optional-dependencies]
+blender = [
+    "bpy==4.4.0"
+]
+
+dev = [
+    "pre-commit",
+    "black",
+    "pytest>=6.0.0",
+]
+
+[tool.setuptools]
+packages = ["glue3d"]
+
+[project.scripts]
+glue3d = "glue3d.main:cli"
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.urls]
+Homepage = "https://github.com/giorgio-mariani/GLUE3D"
+Repository = "https://github.com/giorgio-mariani/GLUE3D"
+Issues = "https://github.com/giorgio-mariani/GLUE3D/issues"
