@@ -15,7 +15,7 @@ ALLOWED_EMAILS = st.secrets.allowed_emails
 
 NO_LABEL_CODE = "ERROR:NO-LABEL-FOUND"
 NO_TYPEFIELD_CODE = "ERROR:NO-TYPEFIELD-FOUND"
-
+DF_KEY = "data_codes"
 
 USER_SYSTEM_PROMPT = "You are a VQA assistant, you help solve visual question-answering tasks provided by the user. Your answer are minimal, providing only the requested information."
 USER_PROMPT = f"""
@@ -84,7 +84,6 @@ def login_page():
     st.title("Pagina di Log-In")
     if st.button("Accedi al tuo account Google ", icon=":material/login:"):
         st.login()
-        st.session_state.codes = pd.DataFrame(columns=["PRODUCT_ID", "TIMESTAMP"])
 
 
 def main():
@@ -98,6 +97,10 @@ def main():
             )
             st.stop()
 
+    if DF_KEY not in st.session_state:
+        st.session_state[DF_KEY] = pd.DataFrame(columns=["PRODUCT_ID", "TIMESTAMP"])
+    df = st.session_state[DF_KEY]
+
     st.set_page_config(page_title="Annotation App")
     st.title("Extrazione codici OMRON")
     st.write("Questa è un app per l'estrazione automatica del codice di prodotti elettronici mandati da Omron Italia.")
@@ -105,7 +108,6 @@ def main():
     uploaded_image = st.camera_input("Fai una foto")
 
     if uploaded_image is not None:
-        df = st.session_state.codes
         if st.button("Invia immagine al server."):
             image = Image.open(uploaded_image)
 
