@@ -1,3 +1,4 @@
+import io
 import tempfile
 from typing import *
 from pathlib import Path
@@ -80,6 +81,18 @@ def send_for_annotation(image: Image.Image):
         return f"⚠️ Request failed: {e.with_traceback(None)}"
 
 
+def convert_to_excelfile(df: pd.DataFrame) -> io.BytesIO:
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine="xlsxwriter") as writer:
+        df.to_excel(writer, sheet_name="Sheet3")
+        writer.close()
+
+    return buffer
+
+
+# Webpages ----------------
+
+
 def login_page():
     st.title("Pagina di Log-In")
     if st.button("Accedi al tuo account Google ", icon=":material/login:"):
@@ -112,7 +125,7 @@ def main():
             image = Image.open(uploaded_image)
 
             # Send POST request
-            with st.spinner("L'immagine sta venendo processata..."):
+            with st.spinner("Stiamo processando l'immagine, per favore attendere..."):
                 with tempfile.NamedTemporaryFile(suffix=".jpg") as fp:
                     image.save(fp)
                     response = request_id(CLIENT, fp.name)
@@ -122,15 +135,23 @@ def main():
             elif response == NO_TYPEFIELD_CODE:
                 st.warning("L'etichetta nell'immagine non dispone di un campo 'TYPE'.")
             else:
-                st.markdown(response.output_text)
+                st.markdown("**PRODUCT-ID:** {response}")
 
                 # Update dataframe
                 timestamp = datetime.today().strftime("%Y-%m-%d_%H%M")
                 df.loc[len(df)] = (response, timestamp)
 
         # Show dataframe
+        st.markdown("Prodotti scansionati:")
         st.dataframe(df)
-        st.download_button(data=df)
+
+        st.download_button(
+            label="Scarica il file excel",
+            data=convert_to_excelfile(df),
+            file_name="product_ids.xlsx",
+            mime="application/vnd.ms-excel",
+            icon=":material/download:",
+        )
     else:
         st.info("Fare una foto per scansionare e processare l'etichetta.")
 
