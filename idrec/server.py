@@ -45,10 +45,8 @@ def create_file(client: OpenAI, file_path):
 
 
 def request_id(client: OpenAI, image: Image) -> str:
-
     with tempfile.NamedTemporaryFile(suffix=".jpg") as fp:
         image.save(fp)
-        # image_data = client.files.create(file=fp, purpose="vision")
         image_data = create_file(client, fp.name)
         response = client.responses.create(
             model="gpt-4.1-mini",
@@ -76,6 +74,11 @@ def convert_to_excelfile(df: pd.DataFrame) -> io.BytesIO:
     return buffer
 
 
+@st.cache_resource
+def get_userdata(user_mail: str) -> pd.DataFrame:
+    return pd.DataFrame(columns=["PRODUCT_ID", "TIMESTAMP"])
+
+
 # Webpages ----------------
 
 
@@ -84,7 +87,8 @@ def flag_for_request():
 
 
 def reset_data():
-    st.session_state[DF_KEY] = pd.DataFrame(columns=["PRODUCT_ID", "TIMESTAMP"])
+    df = get_userdata(st.user.email)
+    df.drop(df.index, inplace=True)
 
 
 def login_page():
@@ -104,17 +108,13 @@ def main():
             )
             st.stop()
 
-    # Initialize session data
-    if DF_KEY not in st.session_state:
-        st.session_state[DF_KEY] = pd.DataFrame(columns=["PRODUCT_ID", "TIMESTAMP"])
-        st.session_state[LAST_RESPONSE_KEY] = "-"
-
-    # Get session data
+    # User and session data
+    df = get_userdata(st.user.email)
     is_requesting = st.session_state.get("is_requesting", False)
-    df = st.session_state[DF_KEY]
+    response = st.session_state.get(LAST_RESPONSE_KEY, "N/A")
 
     st.set_page_config(page_title="Annotation App")
-    st.title("Extrazione codici OMRON")
+    st.title("Estrazione ID-prodotto OMRON")
     st.write("Questa è un app per l'estrazione automatica del codice di prodotti elettronici mandati da Omron Italia.")
 
     uploaded_image = st.camera_input(label="camera", label_visibility="hidden", disabled=is_requesting)
@@ -136,24 +136,26 @@ def main():
 
             # If no errors: Update dataframe
             if response not in [NO_LABEL_CODE, NO_TYPEFIELD_CODE]:
-                timestamp = datetime.today().strftime("%Y-%m-%d_%H%M")
+                timestamp = datetime.today().isoformat(timespec="seconds")
                 df.loc[len(df)] = (response, timestamp)
 
             st.rerun()
-
     else:
         st.info("Fare una foto per scansionare e processare l'etichetta.")
 
     # Show DATA
-    response = st.session_state[LAST_RESPONSE_KEY]
     if response == NO_LABEL_CODE:
         st.warning("L'immagine non contiene un'etichetta.")
     elif response == NO_TYPEFIELD_CODE:
         st.warning("L'etichetta nell'immagine non dispone di un campo 'TYPE'.")
     else:
-        st.markdown(f"**PRODUCT-ID:** {st.session_state[LAST_RESPONSE_KEY]}")
+        st.markdown(f"**PRODUCT-ID:** {response}")
+
     st.markdown("**PRODOTTI SCANSIONATI:**")
-    st.session_state[DF_KEY] = st.data_editor(df, hide_index=True)
+    df.sort_values(by="TIMESTAMP", ascending=False, inplace=True)
+    tmp_df = st.data_editor(df, hide_index=True)
+    for idx in df.index:
+        df.loc[idx] = tmp_df.loc[idx]
 
     c1, c2 = st.columns([0.7, 0.3])
     with c1:
