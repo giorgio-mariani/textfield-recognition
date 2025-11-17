@@ -11,6 +11,7 @@ from idrec.request import request_id, ResponseCodes
 
 # Load secrets data
 ALLOWED_EMAILS = st.secrets.allowed_emails
+ALLOW_UPLOAD = st.secrets.get("allow_upload", False)
 CLIENT = OpenAI(api_key=st.secrets.openai_api_key)
 
 # Session state keys
@@ -29,7 +30,7 @@ def convert_to_excelfile(df: pd.DataFrame) -> io.BytesIO:
 # User data  in memory DB (each email has a rispective DataFrame)
 @st.cache_resource
 def get_userdata(user_mail: str) -> pd.DataFrame:
-    return pd.DataFrame(columns=["PRODUCT_ID", "TIMESTAMP"])
+    return pd.DataFrame(columns=["ID", "ID_NAME", "TIMESTAMP"])
 
 
 # Callbacks ---------------
@@ -68,8 +69,17 @@ def main_page():
         "Questa è un app per l'estrazione automatica di campi testuali da etichette di spedizioni di prodotti elettronici."
     )
     target_field = st.text_input("Campo da estrarre:", "TYPE")
-    uploaded_image = st.camera_input(label="camera", label_visibility="hidden", disabled=is_requesting)
-    uploaded_image = st.file_uploader("Upload") if uploaded_image is None else None
+
+    st.markdown("\n---\n### Scatta una foto\n\nFare una foto per scansionare e processare l'etichetta.")
+    camera_picture = st.camera_input(label="camera", label_visibility="hidden", disabled=is_requesting)
+    if ALLOW_UPLOAD:
+        st.markdown("Oppure caricare un file immagine:")
+        gallery_picture = st.file_uploader(
+            "Upload", label_visibility="hidden", disabled=(is_requesting or camera_picture is not None)
+        )
+        uploaded_image = camera_picture if camera_picture is not None else gallery_picture
+    else:
+        uploaded_image = camera_picture
 
     # Process image
     if uploaded_image is not None:
@@ -89,11 +99,9 @@ def main_page():
             # If no errors: Update dataframe
             if response_code is ResponseCodes.FIELD_FOUND_CODE:
                 timestamp = datetime.today().isoformat(timespec="seconds")
-                df.loc[len(df)] = (response, timestamp)
+                df.loc[len(df)] = (response, target_field, timestamp)
 
             st.rerun()
-    else:
-        st.info("Fare una foto per scansionare e processare l'etichetta.")
 
     # Show DATA
     if response_code == ResponseCodes.NO_LABEL_CODE:

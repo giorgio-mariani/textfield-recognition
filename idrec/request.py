@@ -71,5 +71,3 @@ def request_id(client: OpenAI, image: Image, field_name: str) -> Tuple[str, Resp
         except ValueError as e:
             assert "ERROR" not in response_text and "ACK" not in response_text
             return response_text, ResponseCodes.FIELD_FOUND_CODE
-
-    return response.output_text
