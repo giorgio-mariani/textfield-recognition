@@ -7,11 +7,13 @@ import streamlit as st
 from PIL import Image
 import pandas as pd
 
+from idrec.barcode import get_barcode
 from idrec.request import request_id, ResponseCodes
 
 # Load secrets data
-ALLOWED_EMAILS = st.secrets.allowed_emails
+ALLOWED_EMAILS = st.secrets.get("allowed_emails", [])
 ALLOW_UPLOAD = st.secrets.get("allow_upload", False)
+CHECK_BARCODE = st.secrets.get("check_barcode", False)
 CLIENT = OpenAI(api_key=st.secrets.openai_api_key)
 
 # Session state keys
@@ -30,7 +32,8 @@ def convert_to_excelfile(df: pd.DataFrame) -> io.BytesIO:
 # User data  in memory DB (each email has a rispective DataFrame)
 @st.cache_resource
 def get_userdata(user_mail: str) -> pd.DataFrame:
-    return pd.DataFrame(columns=["ID", "ID_NAME", "TIMESTAMP"])
+    columns = ["TIMESTAMP", "ID", "ID_NAME"] + ["BARCODE"] if CHECK_BARCODE else []
+    return pd.DataFrame(columns=columns)
 
 
 # Callbacks ---------------
@@ -62,6 +65,7 @@ def main_page():
     df = get_userdata(st.user.email)
     is_requesting = st.session_state.get("is_requesting", False)
     (response, response_code) = st.session_state.get(SSTATE_LASTRESPONSE_KEY, ("", None))
+    barcode = None
 
     st.set_page_config(page_title="Annotation App")
     st.title("Estrazione ID-prodotto")
@@ -83,6 +87,13 @@ def main_page():
 
     # Process image
     if uploaded_image is not None:
+        if CHECK_BARCODE:
+            barcode = get_barcode(Image.open(uploaded_image))
+            if barcode is None:
+                st.info("No barcode found in the picture.")
+            else:
+                st.info("A barcode was found in the picture:")
+
         if st.button(
             "Invia immagine al server.",
             width="stretch",
@@ -99,18 +110,34 @@ def main_page():
             # If no errors: Update dataframe
             if response_code is ResponseCodes.FIELD_FOUND_CODE:
                 timestamp = datetime.today().isoformat(timespec="seconds")
-                df.loc[len(df)] = (response, target_field, timestamp)
+
+                data_to_add = (timestamp, response, target_field)
+                data_to_add += (barcode,) if CHECK_BARCODE else tuple()
+                df.loc[len(df)] = data_to_add
 
             st.rerun()
 
     # Show DATA
+    data_to_show = {}
     if response_code == ResponseCodes.NO_LABEL_CODE:
         st.warning("L'immagine non contiene un'etichetta.")
     elif response_code == ResponseCodes.NO_FIELD_CODE:
         st.warning("L'etichetta nell'immagine non dispone di un campo 'TYPE'.")
     elif response_code == ResponseCodes.FIELD_FOUND_CODE:
-        st.markdown(f"**PRODUCT-ID:** {response}")
+        data_to_show["ID"] = response
 
+    if CHECK_BARCODE and barcode is not None:
+        data_to_show["BARCODE"] = barcode
+
+    # Show Data
+    if len(data_to_show) > 0:
+        with st.container(border=True):
+            md_string = ""
+            for k, v in data_to_show.items():
+                md_string += f"- **{k}:** {v}\n\n"
+            st.markdown(md_string)
+
+    st.markdown("\n---\n")
     st.markdown("**PRODOTTI SCANSIONATI:**")
     df.sort_values(by="TIMESTAMP", ascending=False, inplace=True)
     tmp_df = st.data_editor(df, hide_index=True)
@@ -126,6 +153,7 @@ def main_page():
             mime="application/vnd.ms-excel",
             icon=":material/download:",
             width="stretch",
+            disabled=len(df) == 0,
         )
 
     with c2:
